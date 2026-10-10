@@ -86,7 +86,17 @@ func Compare(old, next *Snapshot, oldDir, newDir string) (*Report, error) {
 	}
 	if len(old.Code) > 0 && len(next.Code) > 0 {
 		samples := 0
-		for _, key := range unionKeys(old.Code, next.Code) {
+		components := map[string]bool{}
+		for _, s := range []*Snapshot{old, next} {
+			for key, name := range s.Manifest {
+				if strings.HasSuffix(key, "/@name") && strings.HasPrefix(name, "com.tencent.mm.") {
+					components[strings.ReplaceAll(name, ".", "/")+".java"] = true
+				}
+			}
+		}
+		codeKeys := unionKeys(old.Code, next.Code)
+		sort.SliceStable(codeKeys, func(i, j int) bool { return components[codeKeys[i]] && !components[codeKeys[j]] })
+		for _, key := range codeKeys {
 			a, ao := old.Code[key]
 			b, bo := next.Code[key]
 			if (!old.CodeComplete || !next.CodeComplete) && (!ao || !bo) {

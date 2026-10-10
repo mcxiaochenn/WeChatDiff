@@ -2,6 +2,7 @@
 """Release 即持久化状态；命令失败时终止，附件完整才公开草稿。"""
 import argparse
 import hashlib
+import gzip
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,10 @@ def restore(repo, root):
     if not latest["tag_name"].startswith("apk-"):
         raise RuntimeError("Latest Release 不是 WeChatDiff 状态，拒绝静默重新建立基线")
     gh("release", "download", latest["tag_name"], "--repo", repo, "--pattern", "snapshot.json.gz", "--dir", str(root))
+    with gzip.open(root / "snapshot.json.gz", "rt", encoding="utf-8") as file:
+        snapshot = json.load(file)
+    if latest["tag_name"] != "apk-" + snapshot["identity"]["sha256"]:
+        raise RuntimeError("快照身份与 Release tag 不一致")
     print("基线：", latest["tag_name"])
 
 

@@ -38,15 +38,36 @@ func AIInput(r *Report) []Evidence {
 			return 4
 		}
 	}
-	sort.SliceStable(candidates, func(i, j int) bool { return rank(candidates[i]) < rank(candidates[j]) })
+	semanticPriority := func(e Evidence) int {
+		if strings.Contains(strings.ToLower(e.Path), "debug") || strings.Contains(strings.ToLower(e.Path), "repairer") || strings.Contains(strings.ToLower(e.Path), "test") {
+			return 2
+		}
+		if strings.HasSuffix(e.Path, "/@name") {
+			return 0
+		}
+		return 1
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if rank(candidates[i]) != rank(candidates[j]) {
+			return rank(candidates[i]) < rank(candidates[j])
+		}
+		return semanticPriority(candidates[i]) < semanticPriority(candidates[j])
+	})
 	var out []Evidence
 	n := 2
+	used := map[int]int{}
+	quotas := map[int]int{0: 12, 1: 12, 2: 16, 3: 12, 4: 8}
 	for _, e := range candidates {
+		group := rank(e)
+		if used[group] >= quotas[group] {
+			continue
+		}
 		b, _ := json.Marshal(e)
 		if n+len(b)+1 > AIInputBudget {
 			continue
 		}
 		out = append(out, e)
+		used[group]++
 		n += len(b) + 1
 		if len(out) >= 64 {
 			break

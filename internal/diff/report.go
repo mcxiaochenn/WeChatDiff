@@ -46,13 +46,42 @@ func Markdown(r *Report) string {
 		b.WriteString("首次建立基线，没有版本差分，不生成新增功能或修复结论。\n\n")
 	}
 	b.WriteString("## 已确认的静态变化\n\n仅确认安装包中的事实变化，不等同于用户可见功能已上线。\n\n")
+	components := 0
+	for _, e := range r.Evidence {
+		if e.Kind == "manifest-fact" && strings.HasSuffix(e.Path, "/@name") && (e.Change == "新增" || e.Change == "移除") {
+			if components == 0 {
+				b.WriteString("组件与权限声明变化（最多 20 条）：\n\n")
+			}
+			value := e.After
+			if value == "" {
+				value = e.Before
+			}
+			fmt.Fprintf(&b, "- %s声明 %s（%s）\n", e.Change, safe(value), e.ID)
+			components++
+			if components >= 20 {
+				break
+			}
+		}
+	}
+	if components > 0 {
+		b.WriteString("\n")
+	}
 	var keys []string
 	for k := range r.Counts {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&b, "- %s：%d\n", safe(k), r.Counts[k])
+		parts := strings.SplitN(k, ":", 2)
+		labels := map[string]string{"asset": "其他文件", "dex": "DEX 文件", "literal": "筛选字符串", "manifest-fact": "Manifest 属性", "manifest-reference": "Manifest 资源引用地址（可能为噪声）", "manifest": "Manifest 文件", "native-fact": "SO 代码节/导出符号", "native": "SO 文件", "noise": "忽略噪声", "resource": "资源文件", "code": "反编译代码类"}
+		label := labels[parts[0]]
+		if label == "" {
+			label = parts[0]
+		}
+		if len(parts) > 1 {
+			label += " · " + parts[1]
+		}
+		fmt.Fprintf(&b, "- %s：%d\n", safe(label), r.Counts[k])
 	}
 	b.WriteString("\n## AI 推测（需要人工或运行时验证）\n\n")
 	if len(r.Findings) == 0 {
