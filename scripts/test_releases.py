@@ -32,7 +32,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_missing_asset_keeps_draft(self):
         calls = []
-        def gh(*args):
+        def gh(*args, **kwargs):
             calls.append(args)
             if args[0] == "api" and "--slurp" in args:
                 if len(calls)==1:
@@ -42,21 +42,33 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(releases, "gh", side_effect=gh), patch.dict(os.environ, {"GITHUB_SHA": "commit"}):
             with self.assertRaises(RuntimeError):
                 releases.publish("owner/repo", self.root, True)
-        self.assertFalse(any(c[:2] == ("release", "edit") for c in calls))
+        self.assertFalse(any("PATCH" in c for c in calls))
 
     def test_resume_draft_and_publish(self):
         calls = []
-        def gh(*args):
+        bodies = []
+        def gh(*args, **kwargs):
             calls.append(args)
+            if "body" in kwargs:
+                bodies.append(kwargs["body"])
             if args[0] == "api" and "--slurp" in args:
                 if len(calls)==1:
                     return json.dumps([[{"tag_name": "apk-" + "a" * 64, "draft": True}]])
-                return json.dumps([[{"tag_name":"apk-"+"a"*64,"html_url": "url", "assets": [{"name": n, "size": (self.root / n).stat().st_size} for n in releases.ASSETS]}]])
+                return json.dumps([[{"id":1,"tag_name":"apk-"+"a"*64,"html_url": "url", "assets": [{"name": n, "size": (self.root / n).stat().st_size} for n in releases.ASSETS]}]])
             return ""
         with patch.object(releases, "gh", side_effect=gh):
             releases.publish("owner/repo", self.root, False)
         self.assertFalse(any(c[:2] == ("release", "create") for c in calls))
-        self.assertIn("--latest=false", calls[-1])
+        self.assertIn("PATCH", calls[-1])
+        self.assertEqual(bodies[-1]["make_latest"], "false")
+        self.assertFalse(bodies[-1]["draft"])
+
+    def test_published_wins_over_duplicate_draft(self):
+        existing = [[{"tag_name":"apk-"+"a"*64,"draft":True},
+                     {"tag_name":"apk-"+"a"*64,"draft":False,"html_url":"url"}]]
+        with patch.object(releases,"gh",return_value=json.dumps(existing)) as gh:
+            releases.publish("owner/repo",self.root,True)
+            self.assertEqual(gh.call_count,1)
 
     def test_digest_mismatch(self):
         for n in releases.ASSETS:

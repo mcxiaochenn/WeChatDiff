@@ -9,8 +9,8 @@ from pathlib import Path
 import subprocess
 
 
-def gh(*args):
-    return subprocess.check_output(["gh", *args], text=True)
+def gh(*args, body=None):
+    return subprocess.check_output(["gh", *args], text=True, input=json.dumps(body) if body is not None else None)
 
 
 def restore(repo, root):
@@ -57,7 +57,8 @@ def publish(repo, root, latest):
         raise RuntimeError("Tag 与 APK SHA-256 不一致")
     # 先列出草稿及已发布版本，API 错误不能被误判为“尚未发布”。
     pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"))
-    existing = next((r for page in pages for r in page if r["tag_name"] == tag), None)
+    matches = [r for page in pages for r in page if r["tag_name"] == tag]
+    existing = next((r for r in matches if not r["draft"]), matches[0] if matches else None)
     if existing and not existing["draft"]:
         print("已经发布，跳过：", existing["html_url"])
         return
@@ -76,7 +77,10 @@ def publish(repo, root, latest):
     if not release:
         raise RuntimeError("上传后无法找到待发布草稿")
     verify_assets(root, release["assets"])
-    gh("release", "edit", tag, "--repo", repo, "--title", title, "--notes-file", str(root / "CHANGELOG.md"), "--draft=false", f"--latest={'true' if latest else 'false'}")
+    # 用刚校验的 Release ID 更新，避免同 tag 残留草稿造成歧义。
+    gh("api", "--method", "PATCH", f"repos/{repo}/releases/{release['id']}", "--input", "-",
+       body={"name": title, "body": (root / "CHANGELOG.md").read_text(encoding="utf-8"),
+             "draft": False, "make_latest": "true" if latest else "false"})
     print("发布完成：", release["html_url"])
 
 
