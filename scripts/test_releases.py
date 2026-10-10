@@ -70,6 +70,21 @@ class ReleaseTests(unittest.TestCase):
             releases.publish("owner/repo",self.root,True)
             self.assertEqual(gh.call_count,1)
 
+    def test_select_complete_duplicate_draft(self):
+        calls = []
+        tag = "apk-" + "a" * 64
+        def gh(*args, **kwargs):
+            calls.append(args)
+            if "--slurp" in args:
+                if len(calls)==1:
+                    return json.dumps([[{"tag_name":tag,"draft":True}]])
+                return json.dumps([[{"id":2,"tag_name":tag,"assets":[]},
+                    {"id":1,"tag_name":tag,"html_url":"url","assets":[{"name":n,"size":(self.root/n).stat().st_size} for n in releases.ASSETS]}]])
+            return ""
+        with patch.object(releases,"gh",side_effect=gh):
+            releases.publish("owner/repo",self.root,True)
+        self.assertIn("repos/owner/repo/releases/1",calls[-1])
+
     def test_digest_mismatch(self):
         for n in releases.ASSETS:
             if not (self.root / n).exists():

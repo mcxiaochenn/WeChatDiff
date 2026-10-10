@@ -73,10 +73,16 @@ def publish(repo, root, latest):
     gh("release", "upload", tag, *(str(root / n) for n in ASSETS), "--repo", repo, "--clobber")
     # 按 tag 的 REST 接口仅返回已公开 Release；草稿从有写权限的列表读取。
     pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"))
-    release = next((r for page in pages for r in page if r["tag_name"] == tag), None)
+    release = None
+    for candidate in (r for page in pages for r in page if r["tag_name"] == tag):
+        try:
+            verify_assets(root, candidate["assets"])
+        except RuntimeError:
+            continue
+        release = candidate
+        break
     if not release:
-        raise RuntimeError("上传后无法找到待发布草稿")
-    verify_assets(root, release["assets"])
+        raise RuntimeError("没有附件全部匹配的待发布草稿")
     # 用刚校验的 Release ID 更新，避免同 tag 残留草稿造成歧义。
     gh("api", "--method", "PATCH", f"repos/{repo}/releases/{release['id']}", "--input", "-",
        body={"name": title, "body": (root / "CHANGELOG.md").read_text(encoding="utf-8"),
