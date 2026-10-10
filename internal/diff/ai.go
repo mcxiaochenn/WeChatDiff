@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +15,19 @@ import (
 )
 
 const AIInputBudget = 24000
+
+// AIEndpoint 接受官方或自托管的 HTTPS Chat Completions 基础地址。
+func AIEndpoint(base string) (string, error) {
+	if base == "" {
+		base = "https://api.deepseek.com"
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("DEEPSEEK_BASE_URL 必须为不含凭据、查询或片段的 HTTPS 基础地址")
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/chat/completions"
+	return u.String(), nil
+}
 
 func AIInput(r *Report) []Evidence {
 	// 优先使用可解释事实与代码片段，禁止把所有 DEX 或反编译源码发送给 API。

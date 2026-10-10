@@ -185,6 +185,23 @@ func TestAIFailureFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestAIEndpoint(t *testing.T) {
+	for base, want := range map[string]string{
+		"":                            "https://api.deepseek.com/chat/completions",
+		"https://gateway.example/v1/": "https://gateway.example/v1/chat/completions",
+	} {
+		got, err := AIEndpoint(base)
+		if err != nil || got != want {
+			t.Fatal(got, err)
+		}
+	}
+	for _, base := range []string{"http://gateway.example", "https://key@gateway.example", "https://gateway.example?key=secret", "https://gateway.example#fragment"} {
+		if _, err := AIEndpoint(base); err == nil {
+			t.Fatal("接受不安全的 AI 基础地址")
+		}
+	}
+}
 func TestAISuccessAndHallucination(t *testing.T) {
 	for _, id := range []string{"E000001", "E999999"} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

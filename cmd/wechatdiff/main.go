@@ -31,6 +31,10 @@ func run() error {
 	apksigner := flag.String("apksigner", "", "apksigner 可执行文件路径；Actions 强制验证")
 	known := flag.String("known-tags", "", "已经发布的 SHA-256 tag 列表")
 	flag.Parse()
+	endpoint, e := diff.AIEndpoint(os.Getenv("DEEPSEEK_BASE_URL"))
+	if e != nil {
+		return e
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 	if e := os.MkdirAll(*work, 0755); e != nil {
@@ -141,7 +145,7 @@ func run() error {
 	if model == "" {
 		model = "deepseek-flash"
 	}
-	diff.AnalyzeAI(ctx, report, os.Getenv("DEEPSEEK_API_KEY"), model, "https://api.deepseek.com/chat/completions")
+	diff.AnalyzeAI(ctx, report, os.Getenv("DEEPSEEK_API_KEY"), model, endpoint)
 	if e = diff.WriteReport(*out, report, next); e != nil {
 		return e
 	}

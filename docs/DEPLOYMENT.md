@@ -10,6 +10,7 @@
 | --- | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | Repository Secret | 否 | DeepSeek API 调用；缺失时仍会发布基础报告 |
 | `DEEPSEEK_MODEL` | Repository Variable | 否 | 默认 `deepseek-flash`，需要支持 chat completions、JSON 与关闭 thinking 参数 |
+| `DEEPSEEK_BASE_URL` | Repository Variable | 否 | 默认 `https://api.deepseek.com`；兼容网关通常填写 `https://网关域名/v1`，程序追加 `/chat/completions`。必须 HTTPS，不允许 URL 内嵌凭据 |
 | `GITHUB_TOKEN` | Actions 内置 | 是，自动提供 | 发布 Release；不需要另外设置同名 Secret 或 PAT |
 
 ```bash

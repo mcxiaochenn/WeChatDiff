@@ -33,6 +33,8 @@
 
 默认 AI 模型为低成本 `deepseek-flash`，关闭 thinking。模型名称可通过 Repository Variable `DEEPSEEK_MODEL` 调整。名称与价格以 [DeepSeek 官方文档](https://api-docs.deepseek.com/quick_start/pricing/) 为准。
 
+使用兼容 DeepSeek Chat Completions 的网关时，设置 Repository Variable `DEEPSEEK_BASE_URL`（例如 `https://网关域名/v1`）；Key 仍只放在 `DEEPSEEK_API_KEY` Secret。请求禁止跟随重定向，避免认证信息被转发。
+
 ## 本地运行
 
 需要 Go 1.26.4 或更新版本。基础差分不需要 Java；代码差分需要 Java 17+ 和 JADX 1.5.6。签名验证使用 Android SDK Build Tools 的 `apksigner`。
