@@ -40,7 +40,7 @@ gh run list --repo YOUR_NAME/WeChatDiff
 
 ## 运行条件
 
-- GitHub Ubuntu hosted runner，Go 按 go.mod 安装、Temurin Java 17。
+- 固定 GitHub `ubuntu-24.04` hosted runner，Go 按 go.mod 安装、Temurin Java 17；避免 ubuntu-latest 迁移改变 Android SDK 布局。Actions 固定当前维护版本的提交 SHA。
 - runner 的 Android SDK Build Tools 35.0.0 提供 apksigner。缺失即报错，需要维护工作流中的路径。
 - JADX 1.5.6 的 URL 与 SHA-256 固定在 `scripts/install-jadx.sh`；升级时核验官方资产 digest 并同步修改两者。
 - 单任务最大 55 分钟；Go 主流程最大 45 分钟；每个 APK 反编译最大 12 分钟。
