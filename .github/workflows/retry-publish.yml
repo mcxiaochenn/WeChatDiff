@@ -1,0 +1,48 @@
+name: 重试发布已生成报告
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: '监测与发布任务 ID；须已完成且含完整报告 Artifact'
+        type: string
+        required: true
+      historical:
+        description: '原任务使用了 new_url 指定历史 APK（不设为 Latest）'
+        type: boolean
+        default: false
+concurrency:
+  group: wechatdiff-monitor
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      HISTORICAL: ${{ inputs.historical }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: 校验来源与恢复报告
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > .run.json
+          python3 - <<'PY'
+          import json, os
+          r = json.load(open('.run.json'))
+          if (r['status'] != 'completed' or r['head_branch'] != 'main'
+              or r['head_repository']['full_name'] != os.environ['GITHUB_REPOSITORY']
+              or r['path'] != '.github/workflows/monitor.yml'
+              or r['event'] not in ('schedule', 'workflow_dispatch')):
+              raise SystemExit('只允许本仓库 main 分支已完成的监测工作流报告')
+          PY
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name reports-and-diagnostics --dir .work/recovered
+          test -f .work/recovered/out/metadata.json
+      - name: 恢复草稿并发布完整附件
+        run: |
+          args=(--dir .work/recovered/out)
+          if [[ "$HISTORICAL" == true ]]; then args+=(--historical); fi
+          python3 scripts/releases.py publish "${args[@]}"

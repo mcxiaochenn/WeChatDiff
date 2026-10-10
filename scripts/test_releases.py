@@ -35,9 +35,9 @@ class ReleaseTests(unittest.TestCase):
         def gh(*args):
             calls.append(args)
             if args[0] == "api" and "--slurp" in args:
-                return "[[]]"
-            if args[0] == "api":
-                return '{"assets": [], "html_url": "url"}'
+                if len(calls)==1:
+                    return "[[]]"
+                return json.dumps([[{"tag_name":"apk-"+"a"*64,"assets":[],"html_url":"url"}]])
             return ""
         with patch.object(releases, "gh", side_effect=gh), patch.dict(os.environ, {"GITHUB_SHA": "commit"}):
             with self.assertRaises(RuntimeError):
@@ -49,9 +49,9 @@ class ReleaseTests(unittest.TestCase):
         def gh(*args):
             calls.append(args)
             if args[0] == "api" and "--slurp" in args:
-                return json.dumps([[{"tag_name": "apk-" + "a" * 64, "draft": True}]])
-            if args[0] == "api":
-                return json.dumps({"html_url": "url", "assets": [{"name": n, "size": (self.root / n).stat().st_size} for n in releases.ASSETS]})
+                if len(calls)==1:
+                    return json.dumps([[{"tag_name": "apk-" + "a" * 64, "draft": True}]])
+                return json.dumps([[{"tag_name":"apk-"+"a"*64,"html_url": "url", "assets": [{"name": n, "size": (self.root / n).stat().st_size} for n in releases.ASSETS]}]])
             return ""
         with patch.object(releases, "gh", side_effect=gh):
             releases.publish("owner/repo", self.root, False)

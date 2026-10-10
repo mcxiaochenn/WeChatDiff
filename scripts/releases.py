@@ -70,7 +70,11 @@ def publish(repo, root, latest):
     if not existing:
         gh("release", "create", tag, "--repo", repo, "--draft", "--target", os.environ["GITHUB_SHA"], "--title", title, "--notes-file", str(root / "CHANGELOG.md"))
     gh("release", "upload", tag, *(str(root / n) for n in ASSETS), "--repo", repo, "--clobber")
-    release = json.loads(gh("api", f"repos/{repo}/releases/tags/{tag}"))
+    # 按 tag 的 REST 接口仅返回已公开 Release；草稿从有写权限的列表读取。
+    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"))
+    release = next((r for page in pages for r in page if r["tag_name"] == tag), None)
+    if not release:
+        raise RuntimeError("上传后无法找到待发布草稿")
     verify_assets(root, release["assets"])
     gh("release", "edit", tag, "--repo", repo, "--title", title, "--notes-file", str(root / "CHANGELOG.md"), "--draft=false", f"--latest={'true' if latest else 'false'}")
     print("发布完成：", release["html_url"])

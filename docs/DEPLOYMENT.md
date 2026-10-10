@@ -34,6 +34,8 @@ gh run list --repo YOUR_NAME/WeChatDiff
 
 发布事务：生成四个报告文件 → 生成 SHA256SUMS → 创建/恢复草稿 → 上传五个附件 → 校验远端大小及可用的资产 digest → 公开 Release。任何中间失败都不会公开尚未完整上传的草稿。重跑同一 workflow 即可恢复。不要手动把缺少附件的草稿公开，也不要把无关 Release 设为 Latest。
 
+如果分析已经完成、只有发布失败，可运行「重试发布已生成报告」，填写原「监测与发布」的任务 ID。该入口校验任务来自本仓库 main 分支的监测工作流，再下载完整报告 Artifact，恢复草稿并发布；不会重新下载 APK、反编译或调用 AI。原任务填写了 `new_url` 时，必须勾选 historical，保持历史报告不设为 Latest。Artifact 只保留 14 天，过期后需重新运行分析。
+
 工作流使用同一个 concurrency group 串行运行，且不取消进行中的发布。临时 APK、JADX 源码仅在 runner 工作目录内，不上传；诊断 Artifact 只保留报告与工具日志 14 天。
 
 ## 运行条件
