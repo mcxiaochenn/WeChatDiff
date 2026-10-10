@@ -6,7 +6,7 @@
 
 Go 测试覆盖从 APK ZIP 到 Manifest/DEX 字符串、差分、压缩快照和 Markdown 的完整基础流程；比较仅压缩方式变化的包，确认构建噪声不会形成证据。测试包含同版本不同构建、ABI/签名拒绝条件、DEX 越界与 MUTF-8、腾讯 URL 边界、Manifest 资源 ID 噪声、AI 输入预算、有效/虚假证据 ID、HTTP 429/500 降级与不可信 Markdown 转义。
 
-Python 的 5 项测试覆盖 Release API 失败、已发布版本不可覆盖、缺失附件不能公开、草稿重试和 digest 校验。本地 `go test -cover ./...`、`go vet ./...` 和 Python 测试通过；首轮远端 [CI](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38031023259) 的 race、coverage、vet、格式检查、Python 测试与构建全部通过。
+Go 当前包含 10 个测试入口及其子用例；Python 的 7 项测试覆盖 Release API 失败、已发布版本不可覆盖、缺失附件不能公开、草稿重试、重复草稿选择和 digest 校验。本地 `go test -cover ./...`、`go vet ./...` 和 Python 测试通过；[最终代码 CI](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38032937303) 的 race、coverage、vet、格式检查、Python 测试与构建全部通过。
 
 ## 真实官方 APK
 
@@ -28,7 +28,22 @@ Python 的 5 项测试覆盖 Release API 失败、已发布版本不可覆盖、
 
 整包 JADX 在 3 GiB 堆下发生 OutOfMemoryError，因此正式实现改为逐 DEX 反编译，保持内存预算。部分方法无法反编译时报告明确标记覆盖不完整，只比较两边都已生成的类，不将覆盖缺失当作类新增或删除。
 
-代码差分、远端发布及幂等运行结果将在完成后补充。
+独立交叉核验：
+
+- 使用 Android SDK `aapt2 dump xmltree` 检查两个包：`ChatroomSearchManagerUI`、`ExdeviceSportCalendarUI`、`AgentAuditScanResultActivity` 仅出现在新包 Manifest，与差分报告的新增声明一致。该事实不证明对应功能已经对用户启用。
+- 使用 Android NDK `llvm-objcopy --dump-section .text` 独立提取 `lib/arm64-v8a/libAdvanceP2P.so` 代码节并计算 SHA-256，旧值 `504c6f21c6ec94e5f5c12548bfffca038a28fce249d1fcd3b0017707b80c89c2`、新值 `d672b5a95bd97ef66d8b8ea70ebf5c76d30f3a38e80f6cb7b4ddc5a140958fba`，均与 Go 差分结果完全一致。代码节变化本身不证明具体 P2P 功能修复。
+
+## 远端分析、发布与幂等验收
+
+[真实分析任务](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38031393874) 的下载、签名校验和新旧完整 APK 差分步骤成功，生成 177,406 条证据、新包 237,829 个反编译类索引及 80 个有界代码摘录。代码覆盖不完整，未将 173,865 个未共同匹配的路径声称为新增/删除。292 项 Manifest 资源 ID 地址变化与签名噪声单独标注。引用 ID 唯一；最终证据摘录没有 JADX 失败占位代码和临时目录注释。
+
+该任务的旧发布脚本因 GitHub 按 tag 查询无法读取草稿而失败；问题已经修复，增加了按附件完整性选择草稿、按已校验 Release ID 公开和从可信 Artifact 恢复发布的入口。实际恢复测试还覆盖了同 tag 重复草稿场景，附件校验阻止了空草稿公开。
+
+[发布恢复任务](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38032681044) 成功自动公开 [8.0.79 报告](https://github.com/mcxiaochenn/WeChatDiff/releases/tag/apk-f2a725bc04302ad218a563533ae79356e66b64aa711b275bc919a8d432f7e15d)。已从公开 Release 下载全部五个附件，逐一核验 GitHub 资产 digest，并核验 SHA256SUMS 的四条记录；全部匹配。新旧证书一致，前序 APK 身份与下载 SHA-256 一致，机器可读报告可以解压并解析。未调用真实 AI。
+
+[重复普通监测](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38032938504) 成功恢复 Latest 快照，重新下载当前官网 APK，识别此 SHA-256 已发布，跳过后续反编译、AI 和发布。公开 Release 数量保持 1。新维护版 Actions 和固定 ubuntu-24.04 环境均完成实际运行验证。
+
+一次验证产生的额外空草稿保留为未公开状态，不影响 Latest、已发布 SHA-256 去重或公开报告；脚本优先保护已公开版本，不会因同 tag 残留草稿覆盖它。
 
 ## 限制
 
