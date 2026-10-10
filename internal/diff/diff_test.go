@@ -171,6 +171,10 @@ func TestAIInputBudgetAndReferences(t *testing.T) {
 			t.Fatal("接受无效 AI 证据", s)
 		}
 	}
+	tooMany := strings.Replace(good, `["E000001"]`, `[`+strings.TrimSuffix(strings.Repeat(`"E000001",`, 9), ",")+`]`, 1)
+	if _, e := validateFindings(tooMany, selected); e == nil {
+		t.Fatal("接受单条超过8个引用的 AI 结论")
+	}
 }
 func TestAIFailureFallback(t *testing.T) {
 	for _, status := range []int{429, 500} {

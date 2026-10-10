@@ -6,7 +6,7 @@
 
 Go 测试覆盖从 APK ZIP 到 Manifest/DEX 字符串、差分、压缩快照和 Markdown 的完整基础流程；比较仅压缩方式变化的包，确认构建噪声不会形成证据。测试包含同版本不同构建、ABI/签名拒绝条件、DEX 越界与 MUTF-8、腾讯 URL 边界、Manifest 资源 ID 噪声、AI 输入预算、有效/虚假证据 ID、HTTP 429/500 降级与不可信 Markdown 转义。
 
-Go 当前包含 10 个测试入口及其子用例；Python 的 7 项测试覆盖 Release API 失败、已发布版本不可覆盖、缺失附件不能公开、草稿重试、重复草稿选择和 digest 校验。本地 `go test -cover ./...`、`go vet ./...` 和 Python 测试通过；[最终代码 CI](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38032937303) 的 race、coverage、vet、格式检查、Python 测试与构建全部通过。
+Go 当前包含 11 个测试入口及其子用例；Python 的 7 项测试覆盖 Release API 失败、已发布版本不可覆盖、缺失附件不能公开、草稿重试、重复草稿选择和 digest 校验。本地 `go test -cover ./...`、`go vet ./...` 和 Python 测试通过；[网关配置 CI](https://github.com/mcxiaochenn/WeChatDiff/actions/runs/38033777675) 的 race、coverage、vet、格式检查、Python 测试与构建全部通过。
 
 ## 真实官方 APK
 
@@ -47,4 +47,14 @@ Go 当前包含 10 个测试入口及其子用例；Python 的 7 项测试覆盖
 
 ## 限制
 
-没有 DeepSeek Key 时不能证明真实 API 与模型效果，只能通过 mock HTTP 验证请求、预算、引用校验及失败降级。静态证据不代替功能运行验证；报告不会据此声称聊天、支付等用户功能已改变。
+静态证据不代替功能运行验证；报告不会据此声称聊天、支付等用户功能已改变。
+
+## 真实 AI 网关验证
+
+用户授权后，已配置 `DEEPSEEK_API_KEY` Repository Secret、`DEEPSEEK_BASE_URL=https://sub2api.mcxiaochen.top/v1` 和 `DEEPSEEK_MODEL=deepseek-flash`。模型列表接口返回 `deepseek-flash` 与 `deepseek-v4-pro`，真实 Chat Completions 请求支持当前 JSON 和关闭 thinking 参数。
+
+直接使用已公开的 8.0.78 → 8.0.79 结构化报告验证同一个 Go AI 客户端，没有重新反编译或发送完整 APK/源码。人工调试共发出 4 次请求，其中 2 次因输出校验不通过降级；一个已定位原因是单条结论引用 12 个 ID，超过 8 个的上限。提示词补充引用上限、旧/新代码方向和禁止据纯混淆改名推测行为调整，未放宽校验或启用自动重试。
+
+最终请求输入 35 条证据、23,943 字节证据 JSON，生成 8 条通过 ID、分类、长度与引用数量校验的中文推测。网关返回用量：prompt 8,640、completion 629、total 9,269 Token。核对引用后，新增组件与群聊退出结果文案都有对应 Manifest/资源变化；模型没有声称 Bug 已修复。保活等代码仍有混淆与截断，模型列出的内部变化不证明行为调整。ID 校验不能自动证明语义正确，生成结论始终标记为推测。
+
+AI 验证报告保存于本地忽略目录 `.work/ai-validation/`，原已公开 Release 保持不变；后续新 SHA-256 的监测会使用已保存网关配置。凭据通过隐藏输入传递并保存为 GitHub Secret，没有写入项目文件或报告。
