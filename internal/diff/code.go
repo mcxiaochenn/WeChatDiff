@@ -64,7 +64,7 @@ func Decompile(ctx context.Context, apk, dir, tool string, s *Snapshot) error {
 			return e
 		}
 		fmt.Println("  反编译 " + item.Name)
-		cmd := toolCommand(ctx, tool, "--no-res", "--no-debug-info", "--no-imports", "--threads-count", "2", "--decompilation-mode", "simple", "-d", unitDir, dexPath)
+		cmd := toolCommand(ctx, tool, "--no-res", "--no-debug-info", "--no-imports", "--comments-level", "none", "--threads-count", "2", "--decompilation-mode", "simple", "-d", unitDir, dexPath)
 		cmd.Env = append(os.Environ(), "JAVA_OPTS=-Xmx3g")
 		cmd.Stdout = log
 		cmd.Stderr = log
@@ -79,6 +79,7 @@ func Decompile(ctx context.Context, apk, dir, tool string, s *Snapshot) error {
 		}
 		root := filepath.Join(unitDir, "sources")
 		count := 0
+		skipped := 0
 		e = filepath.WalkDir(root, func(path string, d os.DirEntry, e error) error {
 			if e != nil {
 				return e
@@ -89,6 +90,11 @@ func Decompile(ctx context.Context, apk, dir, tool string, s *Snapshot) error {
 			b, e := os.ReadFile(path)
 			if e != nil {
 				return e
+			}
+			if strings.Contains(string(b), "throw new UnsupportedOperationException(\"Method not decompiled:") {
+				s.CodeComplete = false
+				skipped++
+				return nil
 			}
 			rel, _ := filepath.Rel(root, path)
 			key := filepath.ToSlash(rel)
@@ -107,6 +113,9 @@ func Decompile(ctx context.Context, apk, dir, tool string, s *Snapshot) error {
 		if e != nil || count == 0 {
 			s.CodeComplete = false
 			s.Warnings = append(s.Warnings, "JADX "+item.Name+" 没有可用代码输出")
+		}
+		if skipped > 0 {
+			s.Warnings = append(s.Warnings, fmt.Sprintf("%s 排除 %d 个包含 JADX 失败占位代码的类", item.Name, skipped))
 		}
 	}
 	for k, v := range s.Code {
