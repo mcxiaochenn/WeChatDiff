@@ -1,0 +1,77 @@
+name: 监测与发布
+on:
+  schedule:
+    - cron: '23 1,13 * * *'
+  workflow_dispatch:
+    inputs:
+      old_url:
+        description: '可选：首次运行的旧 APK 官方地址'
+        type: string
+      new_url:
+        description: '可选：指定历史新 APK，报告不设为 Latest'
+        type: string
+concurrency:
+  group: wechatdiff-monitor
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
+      OLD_URL: ${{ inputs.old_url }}
+      NEW_URL: ${{ inputs.new_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: 编译与安装 JADX
+        run: |
+          mkdir -p .work
+          go build -o .work/wechatdiff ./cmd/wechatdiff
+          bash scripts/install-jadx.sh
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+      - name: 恢复持久化状态
+        run: python3 scripts/releases.py restore --dir .work/state
+      - name: 下载、签名校验与差分分析
+        id: analyze
+        run: |
+          args=(--out out --work .work/run --jadx "$PWD/.work/tools/jadx/bin/jadx" --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" --known-tags .work/state/known-tags.txt)
+          if [[ -n "$NEW_URL" ]]; then
+            args+=(--new-url "$NEW_URL")
+            if [[ -n "$OLD_URL" ]]; then args+=(--old-url "$OLD_URL"); fi
+          elif [[ -f .work/state/snapshot.json.gz ]]; then
+            args+=(--baseline .work/state/snapshot.json.gz)
+          elif [[ -n "$OLD_URL" ]]; then
+            args+=(--old-url "$OLD_URL")
+          fi
+          .work/wechatdiff "${args[@]}"
+      - name: 发布完整 Release
+        if: steps.analyze.outputs.changed == 'true'
+        run: |
+          args=(--dir out)
+          if [[ -n "$NEW_URL" ]]; then args+=(--historical); fi
+          python3 scripts/releases.py publish "${args[@]}"
+      - name: 保存诊断及报告（不含 APK 和完整源码）
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reports-and-diagnostics
+          path: |
+            out/
+            .work/run/**/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+          include-hidden-files: true

@@ -1,0 +1,6 @@
+.work/
+out/
+*.apk
+*.exe
+official.html
+__pycache__/

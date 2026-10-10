@@ -1,0 +1,71 @@
+"""验证发布事务：API 失败不创建，附件缺失不公开，已有 Release 不修改。"""
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import releases
+
+
+class ReleaseTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.addCleanup(self.temp.cleanup)
+        for name in releases.ASSETS[:-1]:
+            (self.root / name).write_text("data", encoding="utf-8")
+        metadata = {"tag": "apk-" + "a" * 64, "identity": {"sha256": "a" * 64, "version": "8.0.79", "build": "3200"}}
+        (self.root / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+    def test_api_failure_does_not_create(self):
+        with patch.object(releases, "gh", side_effect=RuntimeError("HTTP 403")) as gh:
+            with self.assertRaises(RuntimeError):
+                releases.publish("owner/repo", self.root, True)
+            self.assertEqual(gh.call_count, 1)
+
+    def test_published_is_immutable(self):
+        existing = [[{"tag_name": "apk-" + "a" * 64, "draft": False, "html_url": "url"}]]
+        with patch.object(releases, "gh", return_value=json.dumps(existing)) as gh:
+            releases.publish("owner/repo", self.root, True)
+            self.assertEqual(gh.call_count, 1)
+
+    def test_missing_asset_keeps_draft(self):
+        calls = []
+        def gh(*args):
+            calls.append(args)
+            if args[0] == "api" and "--slurp" in args:
+                return "[[]]"
+            if args[0] == "api":
+                return '{"assets": [], "html_url": "url"}'
+            return ""
+        with patch.object(releases, "gh", side_effect=gh), patch.dict(os.environ, {"GITHUB_SHA": "commit"}):
+            with self.assertRaises(RuntimeError):
+                releases.publish("owner/repo", self.root, True)
+        self.assertFalse(any(c[:2] == ("release", "edit") for c in calls))
+
+    def test_resume_draft_and_publish(self):
+        calls = []
+        def gh(*args):
+            calls.append(args)
+            if args[0] == "api" and "--slurp" in args:
+                return json.dumps([[{"tag_name": "apk-" + "a" * 64, "draft": True}]])
+            if args[0] == "api":
+                return json.dumps({"html_url": "url", "assets": [{"name": n, "size": (self.root / n).stat().st_size} for n in releases.ASSETS]})
+            return ""
+        with patch.object(releases, "gh", side_effect=gh):
+            releases.publish("owner/repo", self.root, False)
+        self.assertFalse(any(c[:2] == ("release", "create") for c in calls))
+        self.assertIn("--latest=false", calls[-1])
+
+    def test_digest_mismatch(self):
+        for n in releases.ASSETS:
+            if not (self.root / n).exists():
+                (self.root / n).write_text("sum")
+        remote = [{"name": n, "size": (self.root / n).stat().st_size, "digest": "sha256:wrong"} for n in releases.ASSETS]
+        with self.assertRaises(RuntimeError):
+            releases.verify_assets(self.root, remote)
+
+
+if __name__ == "__main__":
+    unittest.main()
